@@ -145,7 +145,7 @@ async def get_documentation(ctx, *, search):
                     elif response_json['results'][index_best_match]['properties'][property_name]['type'] == "multi_select":
                         embed.add_field(
                             name = property_name,
-                            value = ", ".join([e['name'] for e in response_json['results'][index_best_match]['properties'][property_name]['multi_select']]) if response_json['results'][index_best_match]['properties'][property_name]['multi_select'] is not None else "N/A",
+                            value = ", ".join([e['name'] for e in response_json['results'][index_best_match]['properties'][property_name]['multi_select']]) if response_json['results'][index_best_match]['properties'][property_name]['multi_select'] else "N/A",
                             inline = False
                         )
                     elif response_json['results'][index_best_match]['properties'][property_name]['type'] == "date":                        
@@ -179,7 +179,6 @@ async def get_documentation(ctx, *, search):
             title = "Erreur",
             description = f"La page *{search}* est introuvable\nLe nom de la page recherchée est elle correcte ?"
         )
-        
         await ctx.send(embed=embed)
 
 
@@ -217,7 +216,6 @@ async def clear_organisation():
             await channel.purge()
 
 
-# TODO: Complete this function
 # @discord.ext.tasks.loop(time=[datetime.time(15,0,0)])
 @bot.command(name="weather")
 async def send_eod_message(ctx):
@@ -234,10 +232,12 @@ async def send_eod_message(ctx):
             if response.status == 200:
                 response_json = await response.json()
                 
-                output_in_file(response_json)
+                embed = discord.Embed(
+                    color = discord.Colour.from_str("#00B5E2"),
+                    title = "Demain...",
+                    description = ""
+                )
                 
-                # Print message to test
-                embed_desc = ""
                 for i in range(4,10):
                     time = datetime.datetime.fromtimestamp(response_json['list'][i]['dt'])
                     weather_icon = weather_emoji[response_json['list'][i]['weather'][0]['icon'][:-1]]
@@ -252,25 +252,27 @@ async def send_eod_message(ctx):
                     rain_probability = int(response_json['list'][i]['pop'] * 100) // 5 * 5
                     display_rain = (response_json['list'][i]['pop'] > 0.30)
                     
-                    embed_desc += f"**{time.hour}h**\n{weather_icon} {weather_description}\n{temperature_icon} {temperature}°C" 
+                    field_value = ""
+                    field_value += f"{weather_icon} {weather_description}\n{temperature_icon} {temperature}°C" 
                     if display_feel_temperature:
-                        embed_desc += f"(ressentie: {feel_temperature}°C)"
-                    embed_desc += "\n"
+                        field_value += f"(ressentie: {feel_temperature}°C)"
+                    field_value += "\n"
                     if display_wind:
-                        embed_desc += f":triangular_flag_on_post: {wind_speed}km/h (rafales: {wind_gust}km/h)\n"
+                        field_value += f":triangular_flag_on_post: {wind_speed}km/h (rafales: {wind_gust}km/h)\n"
                     if display_rain:
-                        embed_desc += f":droplet: {rain_probability}%\n"
-                    embed_desc += "\n"
-                
-                embed = discord.Embed(
-                    color = discord.Colour.from_str("#00B5E2"),
-                    title = "Demain...",
-                    description = embed_desc
-                )
-                
+                        field_value += f":droplet: {rain_probability}%\n"
+                    field_value += "\n"
+                        
+                    embed.add_field(name=f"{time.hour}h",value=field_value,inline=True)            
+                    
                 await ctx.send(embed=embed)
             else:
-                return
+                embed = discord.Embed(
+                    color = discord.Colour.from_str("#BE1E2E"),
+                    title = "Erreur",
+                    description = f"Les données météorologiques ne sont pas accessible\n*Status code: {response.status} {response.reason}*"
+                )
+                await ctx.send(embed=embed)
 
 
 
