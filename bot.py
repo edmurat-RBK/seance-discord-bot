@@ -1,3 +1,5 @@
+from classes import EmojiConverter
+
 import aiohttp
 import asyncio
 import configparser
@@ -7,6 +9,7 @@ import discord.ext.commands
 import discord.ext.tasks
 from fuzzywuzzy import process, fuzz
 import json
+import pytz
 
 
 global config
@@ -19,6 +22,7 @@ notion_headers = {
     "Notion-Version": "2022-06-28"
 }
 
+emoji_converter = EmojiConverter()
 weather_emoji = {
     "01": ":sunny:",
     "02": ":white_sun_small_cloud:",
@@ -48,6 +52,7 @@ def output_in_file(json_dict,file="output.json"):
 async def on_ready():
     clear_retard.start()
     clear_organisation.start()
+    send_eod_message.start()
 
 
 @bot.command(name="doc")
@@ -105,11 +110,19 @@ async def get_documentation(ctx, *, search):
                     url = response_json['results'][index_best_match]['url'],
                     timestamp = datetime.datetime.fromisoformat(response_json['results'][index_best_match]['last_edited_time'].replace("Z",""))
                 )
-                if response_json['results'][index_best_match]['cover'] is not None:
-                    if response_json['results'][index_best_match]['cover']['type'] == "external":
-                        embed.set_thumbnail(url=response_json['results'][index_best_match]['cover']['external']['url'])
-                
-                await ctx.send(embed=embed)
+                if response_json['results'][index_best_match]['icon'] is not None:
+                    if response_json['results'][index_best_match]['icon']['type'] == "external":
+                        embed.set_thumbnail(url=response_json['results'][index_best_match]['icon']['external']['url'])
+                        await ctx.send(embed=embed)
+                        
+                    elif response_json['results'][index_best_match]['icon']['type'] == "emoji":
+                        
+                        emoji_char = response_json['results'][index_best_match]['icon']['emoji']
+                        png_path = emoji_converter.char_to_png(emoji_char, response_json['results'][index_best_match]['id'], config['Unicode']['save_folder'], 4)
+                        png_file = discord.File(png_path, filename=png_path.split('/')[-1])
+                        
+                        embed.set_thumbnail(url=f"attachment://{png_path.split('/')[-1]}")
+                        await ctx.send(embed=embed,file=png_file)
             
             # If 'title' don't exists in 'properties', it's a database entry.
             else:
@@ -216,18 +229,23 @@ async def clear_organisation():
             await channel.purge()
 
 
-# @discord.ext.tasks.loop(time=[datetime.time(15,0,0)])
-@bot.command(name="weather")
-async def send_eod_message(ctx):
+@discord.ext.tasks.loop(time=[datetime.time(15,0,0)])
+async def send_eod_message():
     # If not Friday, Saturday or Sunday, skip function
     now = datetime.datetime.now()
     if now.weekday() in [4, 5, 6]:
         return await asyncio.sleep(0)
     
+    channels = []
+    for channel in bot.get_all_channels():
+        if config["Discord"]["channel_weather"] in channel.name:
+            channels.append(bot.get_channel(channel.id))
+    
     async with aiohttp.ClientSession() as session:
         requested_url = f"{config['OpenWeather']['base_url']}{config['OpenWeather']['endpoint_forecast']}".format(
             api_key = config['OpenWeather']['token']
         )
+        embed = None
         async with session.get(requested_url) as response:
             if response.status == 200:
                 response_json = await response.json()
@@ -265,14 +283,16 @@ async def send_eod_message(ctx):
                         
                     embed.add_field(name=f"{time.hour}h",value=field_value,inline=True)            
                     
-                await ctx.send(embed=embed)
             else:
                 embed = discord.Embed(
                     color = discord.Colour.from_str("#BE1E2E"),
                     title = "Erreur",
                     description = f"Les données météorologiques ne sont pas accessible\n*Status code: {response.status} {response.reason}*"
                 )
-                await ctx.send(embed=embed)
+            
+        if channels:
+            for channel in channels:
+                await channel.send(embed=embed)
 
 
 
