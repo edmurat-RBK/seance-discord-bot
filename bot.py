@@ -52,7 +52,7 @@ def output_in_file(json_dict,file="output.json"):
 async def on_ready():
     clear_retard.start()
     clear_organisation.start()
-    send_eod_message.start()
+    send_weather_message.start()
 
 
 @bot.command(name="doc")
@@ -69,7 +69,7 @@ async def get_documentation(ctx, *, search):
         async with session.post(requested_url, json=payload, headers=notion_headers) as response:
             response_json = await response.json()
         
-    output_in_file(response_json)
+    # output_in_file(response_json)
     
     # If 'results' is not empty: The search found something
     if response_json['results']:
@@ -123,6 +123,8 @@ async def get_documentation(ctx, *, search):
                         
                         embed.set_thumbnail(url=f"attachment://{png_path.split('/')[-1]}")
                         await ctx.send(embed=embed,file=png_file)
+                else:
+                    await ctx.send(embed=embed)
             
             # If 'title' don't exists in 'properties', it's a database entry.
             else:
@@ -195,6 +197,14 @@ async def get_documentation(ctx, *, search):
         await ctx.send(embed=embed)
 
 
+@bot.command(name="purge")
+async def purge_channel(ctx):
+    if config["Discord"]["channel_retard"] not in ctx.channel.name and config["Discord"]["channel_organisation"] not in ctx.channel.name:
+        return
+    
+    await ctx.channel.purge()
+
+
 @discord.ext.tasks.loop(time=[datetime.time(7,0,0)])
 async def clear_retard():
     # On Saturdays and Sundays, skip function
@@ -230,10 +240,10 @@ async def clear_organisation():
 
 
 @discord.ext.tasks.loop(time=[datetime.time(15,0,0)])
-async def send_eod_message():
+async def send_weather_message():
     # If not Friday, Saturday or Sunday, skip function
     now = datetime.datetime.now()
-    if now.weekday() in [4, 5, 6]:
+    if now.weekday() in [10,11]: #[4, 5, 6]:
         return await asyncio.sleep(0)
     
     channels = []
@@ -250,6 +260,8 @@ async def send_eod_message():
             if response.status == 200:
                 response_json = await response.json()
                 
+                # output_in_file(response_json)
+                
                 embed = discord.Embed(
                     color = discord.Colour.from_str("#00B5E2"),
                     title = "Demain...",
@@ -264,19 +276,19 @@ async def send_eod_message():
                     feel_temperature = int(round(response_json['list'][i]['main']['feels_like'],0))
                     display_feel_temperature = (abs(response_json['list'][i]['main']['temp'] - response_json['list'][i]['main']['feels_like']) > 2)
                     temperature_icon = ":thermometer:" if temperature>0 else ":snowflake:"
-                    wind_speed = int(round(response_json['list'][i]['wind']['speed'],0) * 3.6) // 5 * 5
-                    wind_gust = int(round(response_json['list'][i]['wind']['gust'],0) * 3.6) // 5 * 5
-                    display_wind = ((response_json['list'][i]['wind']['speed'] * 3.6 >= 30) or (response_json['list'][i]['wind']['gust']*3.6 >= 50))
+                    wind_speed = int(response_json['list'][i]['wind']['speed'] * 3.6) // 5 * 5
+                    wind_gust = int(response_json['list'][i]['wind']['gust'] * 3.6) // 5 * 5
+                    display_wind = (response_json['list'][i]['wind']['speed'] * 3.6 >= 30) # or (response_json['list'][i]['wind']['gust']*3.6 >= 50)
                     rain_probability = int(response_json['list'][i]['pop'] * 100) // 5 * 5
                     display_rain = (response_json['list'][i]['pop'] > 0.30)
                     
                     field_value = ""
-                    field_value += f"{weather_icon} {weather_description}\n{temperature_icon} {temperature}°C" 
-                    if display_feel_temperature:
-                        field_value += f"(ressentie: {feel_temperature}°C)"
+                    field_value += f"{weather_icon} {weather_description}\n{temperature_icon} {feel_temperature}°C" 
+                    # if display_feel_temperature:
+                    #     field_value += f"\n\t(ressentie: {feel_temperature}°C)"
                     field_value += "\n"
                     if display_wind:
-                        field_value += f":triangular_flag_on_post: {wind_speed}km/h (rafales: {wind_gust}km/h)\n"
+                        field_value += f":triangular_flag_on_post: {wind_speed}km/h\n" # + f"(rafales: {wind_gust}km/h\n"
                     if display_rain:
                         field_value += f":droplet: {rain_probability}%\n"
                     field_value += "\n"
