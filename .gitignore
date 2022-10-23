@@ -131,4 +131,6 @@ dmypy.json
 # Project specific files
 config.ini
 output.json
-generated_content/
+
+chromedriver.exe
+content/
