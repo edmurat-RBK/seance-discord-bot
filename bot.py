@@ -1,4 +1,4 @@
-from classes import EmojiConverter
+from classes import EmojiConverter, GameDesignLenses
 
 import aiohttp
 import asyncio
@@ -9,19 +9,15 @@ import discord.ext.commands
 import discord.ext.tasks
 from fuzzywuzzy import process, fuzz
 import json
-import pytz
 
 
+
+# Load configuration
 global config
 config = configparser.ConfigParser()
 config.read("config.ini")
 
-notion_headers = {
-    "Authorization": f"Bearer {config['Notion']['token']}",
-    "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
-}
-
+# Load emojis
 emoji_converter = EmojiConverter()
 weather_emoji = {
     "01": ":sunny:",
@@ -35,12 +31,28 @@ weather_emoji = {
     "50": ":fog:"
 }
 
+# Load lenses
+design_lenses = GameDesignLenses()
+design_emoji = {
+    "Designer": ":wrench:",
+    "Player": ":chess_pawn:",
+    "Experience": ":thought_balloon:",
+    "Process": ":zap:",
+    "Game": ":game_die:"
+}
+
+# Build header presets
+notion_headers = {
+    "Authorization": f"Bearer {config['Notion']['token']}",
+    "Content-Type": "application/json",
+    "Notion-Version": "2022-06-28"
+}
+
+# Load Discord bot
 intents=discord.Intents.default()
 intents.message_content = True
 
 bot = discord.ext.commands.Bot(config["Discord"]["command_prefix"], intents=intents)
-
-
 
 
 def output_in_file(json_dict,file="output.json"):
@@ -48,11 +60,14 @@ def output_in_file(json_dict,file="output.json"):
         file.write(json.dumps(json_dict))
 
 
+
+
 @bot.event
 async def on_ready():
     clear_retard.start()
     clear_organisation.start()
-    send_weather_message.start()
+    send_weather.start()
+    send_lenses.start()
 
 
 @bot.command(name="doc")
@@ -74,7 +89,6 @@ async def get_documentation(ctx, *, search):
     # If 'results' is not empty: The search found something
     if response_json['results']:
 
-        # title_list = ["".join([s['plain_text'] for s in e['properties']['title']['title']]) for e in response_json['results']]
         title_list = []
         for result in response_json['results']:
             if 'title' in result['properties']:
@@ -118,7 +132,7 @@ async def get_documentation(ctx, *, search):
                     elif response_json['results'][index_best_match]['icon']['type'] == "emoji":
                         
                         emoji_char = response_json['results'][index_best_match]['icon']['emoji']
-                        png_path = emoji_converter.char_to_png(emoji_char, response_json['results'][index_best_match]['id'], config['Unicode']['save_folder'], 4)
+                        png_path = emoji_converter.char_to_png(emoji_char, response_json['results'][index_best_match]['id'], 4)
                         png_file = discord.File(png_path, filename=png_path.split('/')[-1])
                         
                         embed.set_thumbnail(url=f"attachment://{png_path.split('/')[-1]}")
@@ -138,6 +152,7 @@ async def get_documentation(ctx, *, search):
                 if response_json['results'][index_best_match]['icon'] is not None:
                     if response_json['results'][index_best_match]['icon']['type'] == "file":
                         embed.set_thumbnail(url=response_json['results'][index_best_match]['icon']['file']['url'])
+                
                 for property_name in response_json['results'][index_best_match]['properties']:
                     if response_json['results'][index_best_match]['properties'][property_name]['type'] == "rich_text":
                         embed.add_field(
@@ -240,10 +255,10 @@ async def clear_organisation():
 
 
 @discord.ext.tasks.loop(time=[datetime.time(15,0,0)])
-async def send_weather_message():
+async def send_weather():
     # If not Friday, Saturday or Sunday, skip function
     now = datetime.datetime.now()
-    if now.weekday() in [10,11]: #[4, 5, 6]:
+    if now.weekday() in [4, 5, 6]:
         return await asyncio.sleep(0)
     
     channels = []
@@ -306,6 +321,38 @@ async def send_weather_message():
             for channel in channels:
                 await channel.send(embed=embed)
 
+
+@discord.ext.tasks.loop(time=[datetime.time(21,58,0)])
+async def send_lenses():
+    # If Saturday or Sunday, skip function
+    now = datetime.datetime.now()
+    if now.weekday() in [5]:
+        return await asyncio.sleep(0)
+    
+    channels = []
+    for channel in bot.get_all_channels():
+        if config["Discord"]["channel_game_design"] in channel.name:
+            channels.append(bot.get_channel(channel.id))
+    
+    lens = design_lenses.pick_one()
+    png_path = f"data/lenses/{lens['imageID']}.png"
+    png_file = discord.File(png_path,png_path.split('/')[-1])
+    embed = discord.Embed(
+        color = discord.Colour.from_str("#F8D795"),
+        title = f"[{lens['name']}] {lens['cardTitle']}",
+        description = "".join([f"{design_emoji[suit]} **{suit}**\n" for suit in lens['suitlist']] + ["\n",lens['description'],"\n"] + [f"\n- *{lens_question}*" for lens_question in lens['questionlist']])
+    )
+    embed.set_image(url=f"attachment://{png_path.split('/')[-1]}")
+    embed.set_footer(text = f"Illustation by {lens['artist']}")
+    
+    if channels:
+        for channel in channels:
+            await channel.send(embed=embed,file=png_file)
+
+    
+    
+    
+    
 
 
 
