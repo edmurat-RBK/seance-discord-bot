@@ -1,5 +1,3 @@
-from classes import EmojiConverter, GameDesignLenses
-
 import aiohttp
 import asyncio
 import configparser
@@ -7,8 +5,11 @@ import datetime
 import discord
 import discord.ext.commands
 import discord.ext.tasks
-from fuzzywuzzy import process, fuzz
 import json
+
+from classes import EmojiConverter, GameDesignLenses
+from dateutil import tz
+from fuzzywuzzy import process, fuzz
 
 
 
@@ -54,10 +55,10 @@ intents.message_content = True
 
 bot = discord.ext.commands.Bot(config["Discord"]["command_prefix"], intents=intents)
 
-
 def output_in_file(json_dict,file="output.json"):
     with open(file,"w") as file:
         file.write(json.dumps(json_dict))
+
 
 
 
@@ -68,6 +69,7 @@ async def on_ready():
     clear_organisation.start()
     send_weather.start()
     send_lenses.start()
+
 
 
 @bot.command(name="doc")
@@ -212,6 +214,7 @@ async def get_documentation(ctx, *, search):
         await ctx.send(embed=embed)
 
 
+
 @bot.command(name="purge")
 async def purge_channel(ctx):
     if config["Discord"]["channel_retard"] not in ctx.channel.name and config["Discord"]["channel_organisation"] not in ctx.channel.name:
@@ -220,7 +223,8 @@ async def purge_channel(ctx):
     await ctx.channel.purge()
 
 
-@discord.ext.tasks.loop(time=[datetime.time(7,0,0)])
+
+@discord.ext.tasks.loop(time=[datetime.time(8,0,0,tzinfo=tz.gettz("Europe/Paris"))])
 async def clear_retard():
     # On Saturdays and Sundays, skip function
     now = datetime.datetime.now()
@@ -236,8 +240,13 @@ async def clear_retard():
         for channel in channels:
             await channel.purge()
 
+@clear_retard.before_loop
+async def clear_retard_before():
+    await bot.wait_until_ready()
 
-@discord.ext.tasks.loop(time=[datetime.time(7,0,0)])
+
+
+@discord.ext.tasks.loop(time=[datetime.time(8,0,0,tzinfo=tz.gettz("Europe/Paris"))])
 async def clear_organisation():
     # Skip function every day except on Mondays
     now = datetime.datetime.now()
@@ -253,8 +262,13 @@ async def clear_organisation():
         for channel in channels:
             await channel.purge()
 
+@clear_organisation.before_loop
+async def clear_organisation_before():
+    await bot.wait_until_ready()
 
-@discord.ext.tasks.loop(time=[datetime.time(15,0,0)])
+
+
+@discord.ext.tasks.loop(time=[datetime.time(17,0,0,tzinfo=tz.gettz("Europe/Paris"))])
 async def send_weather():
     # If not Friday, Saturday or Sunday, skip function
     now = datetime.datetime.now()
@@ -321,12 +335,17 @@ async def send_weather():
             for channel in channels:
                 await channel.send(embed=embed)
 
+@send_weather.before_loop
+async def send_weather_before():
+    await bot.wait_until_ready()
 
-@discord.ext.tasks.loop(time=[datetime.time(21,58,0)])
+
+
+@discord.ext.tasks.loop(time=[datetime.time(11,0,0,tzinfo=tz.gettz("Europe/Paris")),datetime.time(15,0,0,tzinfo=tz.gettz("Europe/Paris"))])
 async def send_lenses():
     # If Saturday or Sunday, skip function
     now = datetime.datetime.now()
-    if now.weekday() in [5]:
+    if now.weekday() in [5,6]:
         return await asyncio.sleep(0)
     
     channels = []
@@ -349,10 +368,11 @@ async def send_lenses():
         for channel in channels:
             await channel.send(embed=embed,file=png_file)
 
+@send_lenses.before_loop
+async def send_lenses_before():
+    await bot.wait_until_ready()
     
-    
-    
-    
+
 
 
 

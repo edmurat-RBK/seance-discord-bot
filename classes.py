@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import random
 import re
 import requests
@@ -7,7 +8,13 @@ import requests
 
 class EmojiConverter:
     def __init__(self):
-        self.data = requests.get('https://unicode.org/emoji/charts/full-emoji-list.html').text
+        if os.path.exists("data/unicode.html"):
+            with open("data/unicode.html","r", encoding="utf-8") as file:
+                self.data = file.read()
+        else:
+            self.data = requests.get('https://unicode.org/emoji/charts/full-emoji-list.html').text
+            with open("data/unicode.html","w", encoding="utf-8") as file:
+                file.write(self.data)
     
     def char_to_png(self, emoji, page_id, version=0):
         html_search_string = r"<img alt='{0}' class='imga' src='data:image/png;base64,([^']+)'>"
