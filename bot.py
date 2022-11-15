@@ -289,7 +289,7 @@ async def send_weather():
             if response.status == 200:
                 response_json = await response.json()
                 
-                # output_in_file(response_json)
+                output_in_file(response_json)
                 
                 embed = discord.Embed(
                     color = discord.Colour.from_str("#00B5E2"),
@@ -331,9 +331,14 @@ async def send_weather():
                     description = f"Les données météorologiques ne sont pas accessible\n*Status code: {response.status} {response.reason}*"
                 )
             
-        if channels:
-            for channel in channels:
-                await channel.send(embed=embed)
+            if channels:
+                for channel in channels:
+                    try:
+                        await channel.send(embed=embed)
+                    except:
+                        print(f"Error in send_lenses:\n- Send to: {channel}\n- Broadcast to: {' & '.join([c for c in channels])}")
+            else:
+                print(f"Error in send_weather:\n- No channel to send")
 
 @send_weather.before_loop
 async def send_weather_before():
@@ -366,7 +371,10 @@ async def send_lenses():
     
     if channels:
         for channel in channels:
-            await channel.send(embed=embed,file=png_file)
+            try:
+                await channel.send(embed=embed,file=png_file)
+            except:
+                print(f"Error in send_lenses:\n- Send to: {channel}\n- Broadcast to: {' & '.join([c for c in channels])}\n- Picked lens index: {lens['index']}")
 
 @send_lenses.before_loop
 async def send_lenses_before():
