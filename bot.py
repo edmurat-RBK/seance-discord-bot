@@ -69,6 +69,7 @@ async def on_ready():
     clear_organisation.start()
     send_weather.start()
     send_lenses.start()
+    send_push_reminder.start()
 
 
 
@@ -217,7 +218,9 @@ async def get_documentation(ctx, *, search):
 
 @bot.command(name="purge")
 async def purge_channel(ctx):
-    if config["Discord"]["channel_retard"] not in ctx.channel.name and config["Discord"]["channel_organisation"] not in ctx.channel.name:
+    if (config["Discord"]["channel_retard"] not in ctx.channel.name 
+        and config["Discord"]["channel_organisation"] not in ctx.channel.name
+        and config["Discord"]["channel_merge"] not in ctx.channel.name):
         return
     
     await ctx.channel.purge()
@@ -328,17 +331,17 @@ async def send_weather():
                 embed = discord.Embed(
                     color = discord.Colour.from_str("#BE1E2E"),
                     title = "Erreur",
-                    description = f"Les données météorologiques ne sont pas accessible\n*Status code: {response.status} {response.reason}*"
+                    description = f"Les données météorologiques ne sont pas accessibles\n*Status code: {response.status} {response.reason}*"
                 )
             
-            if channels:
-                for channel in channels:
-                    try:
-                        await channel.send(embed=embed)
-                    except:
-                        print(f"Error in send_lenses:\n- Send to: {channel}\n- Broadcast to: {' & '.join([c for c in channels])}")
-            else:
-                print(f"Error in send_weather:\n- No channel to send")
+    if channels:
+        for channel in channels:
+            try:
+                await channel.send(embed=embed)
+            except:
+                print(f"Error in send_lenses:\n- Send to: {channel.name}\n- Broadcast to: {' & '.join([c.name for c in channels])}")
+    else:
+        print(f"Error in send_weather:\n- No channel to send")
 
 @send_weather.before_loop
 async def send_weather_before():
@@ -346,7 +349,7 @@ async def send_weather_before():
 
 
 
-@discord.ext.tasks.loop(time=[datetime.time(11,0,0,tzinfo=tz.gettz("Europe/Paris")),datetime.time(15,0,0,tzinfo=tz.gettz("Europe/Paris"))])
+@discord.ext.tasks.loop(time=[datetime.time(15,0,0,tzinfo=tz.gettz("Europe/Paris"))])
 async def send_lenses():
     # If Saturday or Sunday, skip function
     now = datetime.datetime.now()
@@ -374,13 +377,35 @@ async def send_lenses():
             try:
                 await channel.send(embed=embed,file=png_file)
             except:
-                print(f"Error in send_lenses:\n- Send to: {channel}\n- Broadcast to: {' & '.join([c for c in channels])}\n- Picked lens index: {lens['index']}")
+                print(f"Error in send_lenses:\n- Send to: {channel.name}\n- Broadcast to: {' & '.join([c.name for c in channels])}\n- Picked lens index: {lens['index']}")
 
 @send_lenses.before_loop
 async def send_lenses_before():
     await bot.wait_until_ready()
     
 
+
+@discord.ext.tasks.loop(time=[datetime.time(10,0,0,tzinfo=tz.gettz("Europe/Paris"))])
+async def send_push_reminder():
+    # Skip function on Saturdays and Sundays
+    now = datetime.datetime.now()
+    if now.weekday() in [5, 6]:
+        return await asyncio.sleep(0)
+    
+    channels = []
+    for channel in bot.get_all_channels():
+        if config["Discord"]["channel_merge"] in channel.name:
+            channels.append(bot.get_channel(channel.id))
+    
+    if channels:
+        for channel in channels:
+            message = await channel.send("@Team Pushez vos branches pour le merge")
+            emoji = '\N{THUMBS UP SIGN}'
+            await message.add_reaction(emoji)
+
+@send_push_reminder.before_loop
+async def send_push_reminder_before():
+    await bot.wait_until_ready()
 
 
 
