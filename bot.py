@@ -399,7 +399,7 @@ async def send_push_reminder():
     
     if channels:
         for channel in channels:
-            message = await channel.send("@Team Pushez vos branches pour le merge")
+            message = await channel.send(f"<@&{config['Discord']['team_role_id']}> Pushez vos branches pour le merge")
             emoji = '\N{THUMBS UP SIGN}'
             await message.add_reaction(emoji)
 
